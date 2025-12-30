@@ -1,5 +1,5 @@
 -- archivo: blurred.lua
--- versión: V105 (Popup Trigger)
+-- versión: V106 (True Blurred Mapping & Hysteresis)
 
 engine.name = 'Blurred'
 
@@ -13,13 +13,17 @@ local Sixteen = require 'blurred/lib/sixteen'
 local g = grid.connect()
 state = Globals.new() 
 
--- MAPEO DE FADERS
+-- MAPEO V106: Proposal A (Logic Flow)
 local fader_map = {
-  [1] = "mix", [2] = "depth", [3] = "decay", [4] = "feedback",
-  [5] = "frequency", [6] = "time_scale", [7] = "wander", [8] = "grit",
-  [9] = "div_base", [10] = "lfo_rate", [11] = "lfo_amt", [12] = "skew",
-  [13] = "polarity", [14] = "damping", [15] = "tone", [16] = "amp"
+  [1] = "mix",        [2] = "time_scale", [3] = "frequency", [4] = "decay",
+  [5] = "feedback",   [6] = "grit",       [7] = "damping",   [8] = "polarity",
+  [9] = "wander",     [10]= "depth",      [11]= "skew",      [12]= "div_base",
+  [13]= "lfo_rate",   [14]= "lfo_amt",    [15]= "tone",      [16]= "amp"
 }
+
+-- HISTÉRESIS: Tabla para guardar últimos valores y evitar jitter
+local last_cc_vals = {}
+local JITTER_THRESHOLD = 0.02 -- 2% de movimiento requerido
 
 function init()
   audio.level_adc_cut(1)
@@ -28,7 +32,7 @@ function init()
   Params.init()
   GridCtrl.init(g, state)
   
-  -- INICIALIZAR 16n CON POPUP
+  -- INICIALIZAR 16n CON POPUP + HISTÉRESIS
   Sixteen.init(function(msg)
     local slider_id = Sixteen.cc_2_slider_id(msg.cc)
     
@@ -39,14 +43,26 @@ function init()
     if slider_id and fader_map[slider_id] then
        local param_id = fader_map[slider_id]
        local val = msg.val / 127
-       params:set_raw(param_id, val)
        
-       -- ACTIVAR POPUP
-       local p = params:lookup_param(param_id)
-       state.popup.name = p.name
-       state.popup.value = p:string() -- Valor formateado (ej: 50%, 0.05 Hz)
-       state.popup.deadline = util.time() + 1.0 -- Mostrar por 1 segundo
-       state.popup.active = true
+       -- CONTROL DE DIVERGENCIA EXPONENCIAL
+       if param_id == "div_base" then
+         val = val * val -- Curva exponencial (x^2)
+       end
+       
+       -- ALGORITMO ANTI-JITTER
+       local prev = last_cc_vals[slider_id] or -1
+       if math.abs(val - prev) > JITTER_THRESHOLD then
+         last_cc_vals[slider_id] = val
+         
+         params:set_raw(param_id, val)
+         
+         -- ACTIVAR POPUP
+         local p = params:lookup_param(param_id)
+         state.popup.name = p.name
+         state.popup.value = p:string() 
+         state.popup.deadline = util.time() + 1.0 
+         state.popup.active = true
+       end
     end
   end)
   
