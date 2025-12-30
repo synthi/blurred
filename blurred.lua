@@ -1,5 +1,5 @@
 -- archivo: blurred.lua
--- versión: V106 (True Blurred Mapping & Hysteresis)
+-- versión: V200 (Vintage Poly Integration)
 
 engine.name = 'Blurred'
 
@@ -9,11 +9,12 @@ local Graphics = require 'blurred/lib/graphics'
 local Controls = require 'blurred/lib/controls'
 local GridCtrl = require 'blurred/lib/grid_control'
 local Sixteen = require 'blurred/lib/sixteen'
+local MusicUtil = require 'musicutil' -- Necesario para escalas
 
 local g = grid.connect()
 state = Globals.new() 
 
--- MAPEO V106: Proposal A (Logic Flow)
+-- MAPEO 16n (Blurred FX Controls)
 local fader_map = {
   [1] = "mix",        [2] = "time_scale", [3] = "frequency", [4] = "decay",
   [5] = "feedback",   [6] = "grit",       [7] = "damping",   [8] = "polarity",
@@ -21,9 +22,8 @@ local fader_map = {
   [13]= "lfo_rate",   [14]= "lfo_amt",    [15]= "tone",      [16]= "amp"
 }
 
--- HISTÉRESIS: Tabla para guardar últimos valores y evitar jitter
 local last_cc_vals = {}
-local JITTER_THRESHOLD = 0.02 -- 2% de movimiento requerido
+local JITTER_THRESHOLD = 0.02
 
 function init()
   audio.level_adc_cut(1)
@@ -32,7 +32,7 @@ function init()
   Params.init()
   GridCtrl.init(g, state)
   
-  -- INICIALIZAR 16n CON POPUP + HISTÉRESIS
+  -- INICIALIZAR 16n
   Sixteen.init(function(msg)
     local slider_id = Sixteen.cc_2_slider_id(msg.cc)
     
@@ -44,19 +44,13 @@ function init()
        local param_id = fader_map[slider_id]
        local val = msg.val / 127
        
-       -- CONTROL DE DIVERGENCIA EXPONENCIAL
-       if param_id == "div_base" then
-         val = val * val -- Curva exponencial (x^2)
-       end
+       if param_id == "div_base" then val = val * val end
        
-       -- ALGORITMO ANTI-JITTER
        local prev = last_cc_vals[slider_id] or -1
        if math.abs(val - prev) > JITTER_THRESHOLD then
          last_cc_vals[slider_id] = val
-         
          params:set_raw(param_id, val)
          
-         -- ACTIVAR POPUP
          local p = params:lookup_param(param_id)
          state.popup.name = p.name
          state.popup.value = p:string() 
