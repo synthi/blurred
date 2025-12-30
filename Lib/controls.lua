@@ -1,5 +1,5 @@
 -- archivo: lib/controls.lua
--- versión: V102 (Circular LFO)
+-- versión: V116 (Fix MISC Page Encoders)
 
 local Controls = {}
 
@@ -55,7 +55,7 @@ function Controls.enc(n, d, state)
     if p == state.PAGES.MAIN then params:delta("mix", d)
     elseif p == state.PAGES.PHYSICS then params:delta("feedback", d)
     elseif p == state.PAGES.TEXTURE then params:delta("wander", d)
-    elseif p == state.PAGES.DYNAMICS then params:delta("grit", d)
+    elseif p == state.PAGES.MISC then params:delta("grit", d) -- FIXED
     elseif p == state.PAGES.DIVERGENCE then params:delta("lfo_rate", d * 0.5)
     elseif p == state.PAGES.OUTPUT then params:delta("tone", d)
     end
@@ -64,7 +64,7 @@ function Controls.enc(n, d, state)
     if p == state.PAGES.MAIN then params:delta("depth", d)
     elseif p == state.PAGES.PHYSICS then params:delta("polarity", d)
     elseif p == state.PAGES.TEXTURE then params:delta("time_scale", d)
-    elseif p == state.PAGES.DYNAMICS then params:delta("dyn_res", d)
+    elseif p == state.PAGES.MISC then params:delta("dyn_res", d) -- FIXED
     elseif p == state.PAGES.DIVERGENCE then params:delta("lfo_amt", d * 0.666)
     elseif p == state.PAGES.OUTPUT then params:delta("amp", d)
     end
@@ -73,7 +73,7 @@ function Controls.enc(n, d, state)
     if p == state.PAGES.MAIN then params:delta("decay", d * 2)
     elseif p == state.PAGES.PHYSICS then params:delta("damping", d)
     elseif p == state.PAGES.TEXTURE then params:delta("frequency", d)
-    elseif p == state.PAGES.DYNAMICS then params:delta("ef_clamp", d)
+    elseif p == state.PAGES.MISC then params:delta("fb_tap_pos", d) -- FIXED
     elseif p == state.PAGES.DIVERGENCE then params:delta("div_base", d * 0.666)
     elseif p == state.PAGES.OUTPUT then params:delta("skew", d)
     end
