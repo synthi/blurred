@@ -1,6 +1,6 @@
 // archivo: Engine_Blurred.sc
-// versión: V100 (Rebrand)
-// descripción: 111 Polos. Divergencia Estéreo. Tanh Safety. Variables estrictas.
+// versión: V115 (Creamy Feedback & Scaled Grit)
+// descripción: Grit Drive reducido drásticamente (max 1.4x). Feedback suave. Decimator exacto.
 
 Engine_Blurred : CroneEngine {
     var <synth;
@@ -32,6 +32,9 @@ Engine_Blurred : CroneEngine {
                 // Divergence
                 lfo_rate=0.1, lfo_amt=0, div_base=0, lfo_shape=0,
                 
+                // Feedback Tap Select (0.0 - 7.0)
+                fb_tap_pos=7,
+
                 // Exciters
                 ping_trig=0, ping_pitch=60, ping_amp=1.0, ping_color=0,
                 scrape_vel=0, scrape_slew=0.2, scrape_pitch=0.5, scrape_color=0;
@@ -50,14 +53,18 @@ Engine_Blurred : CroneEngine {
 
             var lfos; 
             var sig_lp, sig_hp, selector;
-            var mod, curve_exponent, ratio_sig, dist, base_time, t_left, t_right;
-            var feedback_sig;
-            var input_env, dynamic_decay, max_decay, dyn_val;
+            var feedback_sig, fb_source_l, fb_source_r;
+            var input_env, max_decay, dyn_val;
             var dj_lp_cut, dj_hp_cut;
             
             // Variables Divergencia
             var lfo_sig, div_total;
             var freq_l, freq_r, time_l, time_r, decay_l, decay_r, pol_l, pol_r, depth_l, depth_r;
+
+            // Variables Grit Macro
+            var grit_drive, grit_stage_mask;
+            var dec_sr, dec_bits, sig_decimated;
+            var tape_wobble;
 
             // -- CÓDIGO --
             lag_freq = Lag.kr(frequency, freq_slew);
@@ -92,7 +99,7 @@ Engine_Blurred : CroneEngine {
             depth_l = (depth + (div_total.pow(3) * 0.25)).clip(0, 1);
             depth_r = (depth - (div_total.pow(3) * 0.25)).clip(0, 1);
 
-            // 3. INPUT
+            // 3. INPUT & EXCITERS
             input = In.ar(inBus, 2);
             
             // Ping
@@ -122,24 +129,52 @@ Engine_Blurred : CroneEngine {
 
             // 4. DYNAMICS
             input_env = Amplitude.kr(Mix.ar(dry), 0.01, 0.1); 
-            
             max_decay = Select.kr(ef_clamp, [DC.kr(30.0), lag_decay]);
             dyn_val = input_env.linlin(0, 1, 0, max_decay);
-            
             decay_l = XFade2.kr(decay_l, dyn_val, (dyn_res * 2) - 1);
             decay_r = XFade2.kr(decay_r, dyn_val, (dyn_res * 2) - 1);
 
             // 5. FEEDBACK LOOP
             feedback_sig = LocalIn.ar(2);
             feedback_sig = LPF.ar(feedback_sig, 20000 - (damping * 18000));
-            feedback_sig = (feedback_sig * (1 + (grit * 5))).tanh; 
-            feedback_sig = LeakDC.ar(feedback_sig); 
+            
+            // A. Grit: Saturation (ESCALADO 10x MENOS)
+            // Antes: 1 + (grit * 4) -> Max 5.0 (Brutal)
+            // Ahora: 1 + (grit * 0.4) -> Max 1.4 (Cremoso)
+            grit_drive = 1 + (grit * 0.4); 
+            feedback_sig = (feedback_sig * grit_drive).tanh;
+            
+            // B. Grit: Decimator (Curva exacta pedida)
+            grit_stage_mask = grit > 0.85; 
+            
+            // Freq: 48k->16k (0-85%), 16k->1k (85-100%)
+            dec_sr = Select.kr(grit_stage_mask, [
+                LinLin.kr(grit, 0.0, 0.85, 48000, 16000),
+                LinExp.kr(grit, 0.85, 1.0, 16000, 1000)
+            ]);
+            
+            // Bits: 24->8 (0-85%), 8->4 (85-100%)
+            dec_bits = Select.kr(grit_stage_mask, [
+                LinLin.kr(grit, 0.0, 0.85, 24, 8),
+                LinLin.kr(grit, 0.85, 1.0, 8, 4)
+            ]);
+            
+            sig_decimated = Decimator.ar(feedback_sig, dec_sr, dec_bits);
+            
+            // Mezcla progresiva hasta 50% Wet
+            feedback_sig = XFade2.ar(feedback_sig, sig_decimated, (grit * 0.5 * 2) - 1);
 
+            // C. Grit: Tape Wobble (10ms base para evitar artefactos largos)
+            tape_wobble = LFNoise2.kr(3).bipolar(grit * 0.005); 
+            feedback_sig = Select.ar(grit > 0.5, [feedback_sig, DelayC.ar(feedback_sig, 0.1, 0.01 + tape_wobble)]);
+
+            feedback_sig = LeakDC.ar(feedback_sig); 
             sig = dry + (feedback_sig * feedback);
             
             left_chain = sig[0];
             right_chain = sig[1];
 
+            // ORIGINAL LFO DEFINITION 
             lfos = Array.fill(111, { arg i; 
                 LFNoise1.kr(0.1 + (i * 0.02)).bipolar(wander * 0.005) 
             });
@@ -149,23 +184,27 @@ Engine_Blurred : CroneEngine {
             tap_indices = [0, 16, 32, 48, 64, 80, 96, 110]; 
             tap_count = 0;
 
-            // 6. SMEAR CHAIN
+            // 6. SMEAR CHAIN (RESTAURACIÓN V100)
             numStages.do({ arg i;
-                var stage_ratio = i / numStages; 
+                var stage_ratio;
                 var dist_l, dist_r;
                 var base_l, base_r;
                 
-                dist_l = DC.kr(stage_ratio).pow(2.pow(pol_l * 2));
-                dist_r = DC.kr(stage_ratio).pow(2.pow(pol_r * 2));
+                stage_ratio = i / numStages; 
+                
+                dist_l = stage_ratio.pow(2.pow(pol_l * 2));
+                dist_r = stage_ratio.pow(2.pow(pol_r * 2));
                 
                 base_l = (0.0001 * time_l) + (time_l * 0.05 * dist_l * (1.0 - freq_l).pow(2));
                 base_r = (0.0001 * time_r) + (time_r * 0.05 * dist_r * (1.0 - freq_r).pow(2));
                 
+                // Sin safety clamps
                 base_l = base_l.max(0.00001) + lfos[i];
                 base_r = base_r.max(0.00001) + lfos[i];
 
                 base_r = base_r + (skew * 0.01 * stage_ratio);
 
+                // El clip V100
                 left_chain = AllpassL.ar(left_chain, 0.05, base_l.clip(0.00001, 0.05), decay_l);
                 right_chain = AllpassL.ar(right_chain, 0.05, base_r.clip(0.00001, 0.05), decay_r);
                 
@@ -176,7 +215,10 @@ Engine_Blurred : CroneEngine {
                 });
             });
 
-            LocalOut.ar([left_chain, right_chain].tanh);
+            fb_source_l = SelectX.ar(fb_tap_pos, taps_left);
+            fb_source_r = SelectX.ar(fb_tap_pos, taps_right);
+
+            LocalOut.ar([fb_source_l, fb_source_r].tanh);
 
             // 7. OUTPUT
             wet = [
@@ -214,11 +256,11 @@ Engine_Blurred : CroneEngine {
         this.addCommand("damping", "f", { arg msg; synth.set(\damping, msg[1]); });
         this.addCommand("dyn_res", "f", { arg msg; synth.set(\dyn_res, msg[1]); });
         this.addCommand("ef_clamp", "f", { arg msg; synth.set(\ef_clamp, msg[1]); });
-        
         this.addCommand("lfo_rate", "f", { arg msg; synth.set(\lfo_rate, msg[1]); });
         this.addCommand("lfo_amt", "f", { arg msg; synth.set(\lfo_amt, msg[1]); });
         this.addCommand("div_base", "f", { arg msg; synth.set(\div_base, msg[1]); });
         this.addCommand("lfo_shape", "f", { arg msg; synth.set(\lfo_shape, msg[1]); });
+        this.addCommand("fb_tap_pos", "f", { arg msg; synth.set(\fb_tap_pos, msg[1]); });
         
         this.addCommand("scrape_vel", "f", { arg msg; synth.set(\scrape_vel, msg[1]); });
         this.addCommand("scrape_pitch", "f", { arg msg; synth.set(\scrape_pitch, msg[1]); });
