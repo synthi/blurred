@@ -1,5 +1,5 @@
 -- archivo: lib/params.lua
--- versión: V101 (Madness -> Divergence)
+-- versión: V108 (Renamed Resonance to Delay)
 
 local Params = {}
 
@@ -10,7 +10,8 @@ function Params.init()
   params:add_group("MAIN", 3)
   params:add{type = "control", id = "mix", name = "Mix", controlspec = controlspec.new(0, 1, 'lin', 0, 0.5, "%"), action = function(x) engine.mix(x) end}
   params:add{type = "control", id = "depth", name = "Depth", controlspec = controlspec.new(0, 1, 'lin', 0, 1, ""), action = function(x) engine.depth(x) end}
-  params:add{type = "control", id = "decay", name = "Resonance", controlspec = controlspec.new(0.001, 10.0, 'exp', 0, 0.5, "s"), action = function(x) engine.decay(x) end}
+  -- CAMBIO DE NOMBRE: Resonance -> Delay
+  params:add{type = "control", id = "decay", name = "Delay", controlspec = controlspec.new(0.001, 10.0, 'exp', 0, 0.5, "s"), action = function(x) engine.decay(x) end}
 
   -- P2: PHYSICS
   params:add_group("PHYSICS", 3)
@@ -24,17 +25,16 @@ function Params.init()
   params:add{type = "control", id = "time_scale", name = "Time Scale", controlspec = controlspec.new(0.01, 1.0, 'exp', 0, 1.0, "x"), action = function(x) engine.time_scale(x) end}
   params:add{type = "control", id = "wander", name = "Wander", controlspec = controlspec.new(0, 1, 'lin', 0, 0, ""), action = function(x) engine.wander(x) end}
 
-  -- P4: DYNAMICS
-  params:add_group("DYNAMICS", 3)
-  params:add{type = "control", id = "grit", name = "Grit (Sat)", controlspec = controlspec.new(0, 1, 'lin', 0, 0, ""), action = function(x) engine.grit(x) end}
+  -- P4: MISC
+  params:add_group("MISC", 3)
+  params:add{type = "control", id = "grit", name = "Grit (Macro)", controlspec = controlspec.new(0, 1, 'lin', 0, 0, ""), action = function(x) engine.grit(x) end}
   params:add{type = "control", id = "dyn_res", name = "Dyn. Res", controlspec = controlspec.new(0, 1, 'lin', 0, 0, "%"), action = function(x) engine.dyn_res(x) end}
-  params:add{type = "option", id = "ef_clamp", name = "EF Clamp", options = {"OFF", "ON"}, default = 2, action = function(x) engine.ef_clamp(x-1) end}
+  params:add{type = "control", id = "fb_tap_pos", name = "Fdbk Tap", controlspec = controlspec.new(0, 7, 'lin', 0, 7, ""), action = function(x) engine.fb_tap_pos(x) end}
 
   -- P5: DIVERGENCE
   params:add_group("DIVERGENCE", 4)
   params:add{type = "control", id = "lfo_rate", name = "LFO Rate", controlspec = controlspec.new(0.01, 20.0, 'exp', 0, 0.1, "Hz"), action = function(x) engine.lfo_rate(x) end}
   params:add{type = "control", id = "lfo_amt", name = "LFO Amount", controlspec = controlspec.new(0, 1, 'lin', 0, 0, ""), action = function(x) engine.lfo_amt(x) end}
-  -- CAMBIO DE NOMBRE AQUÍ
   params:add{type = "control", id = "div_base", name = "Divergence", controlspec = controlspec.new(0, 1, 'lin', 0, 0, ""), action = function(x) engine.div_base(x) end}
   params:add{type = "number", id = "lfo_shape", name = "LFO Shape", min=1, max=6, default=1, action = function(x) engine.lfo_shape(x-1) end}
 
@@ -54,6 +54,9 @@ function Params.init()
   params:add{type = "control", id = "ping_amp", name = "P. Amp", controlspec = controlspec.new(0, 1, 'lin', 0, 1), action = function(x) engine.ping_amp(x) end}
   params:add{type = "control", id = "ping_color", name = "P. Color", controlspec = controlspec.new(-1, 1, 'lin', 0, 0), action = function(x) engine.ping_color(x) end}
   
+  params:add_group("SYSTEM", 1)
+  params:add{type = "option", id = "ef_clamp", name = "EF Clamp", options = {"OFF", "ON"}, default = 2, action = function(x) engine.ef_clamp(x-1) end}
+
   params:bang()
 end
 
