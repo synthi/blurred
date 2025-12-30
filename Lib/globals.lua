@@ -1,5 +1,5 @@
 -- archivo: lib/globals.lua
--- versión: V105 (Popup State)
+-- versión: V107 (Page Rename)
 
 local Globals = {}
 
@@ -40,11 +40,11 @@ function Globals.new()
       MAIN = 1,
       PHYSICS = 2,
       TEXTURE = 3,
-      DYNAMICS = 4,
+      MISC = 4,      -- RENOMBRADO DE DYNAMICS
       DIVERGENCE = 5,
       OUTPUT = 6
     },
-    PAGE_NAMES = {"MAIN", "PHYSICS", "TEXTURE", "DYNAMICS", "DIVERGENCE", "OUTPUT"}
+    PAGE_NAMES = {"MAIN", "PHYSICS", "TEXTURE", "MISC", "DIVERGENCE", "OUTPUT"}
   }
   return s
 end
