@@ -1,5 +1,5 @@
 -- archivo: lib/graphics.lua
--- versión: V205 (LFO Sync Fix)
+-- versión: V231 (Rect Fix)
 
 local Graphics = {}
 
@@ -8,11 +8,15 @@ local MAX_TRAILS = 10
 local anim_phase = 0
 local lfo_phase = 0
 
--- ... [DRAW HELPER FUNCTIONS SAME AS BEFORE] ...
 local function draw_param_inline(label, value, x, y, align)
   screen.move(x, y)
   local str = label .. ": " .. value
   if align == "right" then screen.text_right(str) else screen.text(str) end
+end
+
+local function draw_key_hint(text, x, y, align)
+  screen.level(2); screen.move(x, y)
+  if align == "right" then screen.text_right(text) else screen.text(text) end; screen.level(15)
 end
 
 local function draw_lfo_icon(shape, x, y)
@@ -53,17 +57,14 @@ local function draw_chain(state)
   local base_w=107; local variable_w=7; local total_width=base_w+(variable_w*time_scale)
   local start_x=cx-(total_width/2); local step=total_width/stages
   
-  anim_phase=anim_phase+(0.1+(wander*0.2))
+  local is_frozen = (params:get("texture_freeze") == 2)
+  if not is_frozen then anim_phase=anim_phase+(0.1+(wander*0.2)) end
   
-  -- LFO RATE FIX (Divided by FPS for visual sync)
-  lfo_phase = lfo_phase + (lfo_rate / 15)
-  local lfo_val = math.sin(lfo_phase)
-  
+  lfo_phase=lfo_phase+(lfo_rate/15); local lfo_val=math.sin(lfo_phase)
   local div_total=div_base+(lfo_val*lfo_amt); if div_total<0 then div_total=0 end; if div_total>1 then div_total=1 end
   local jitter_amt=grit*4.0; local spray_radius=0.5+(feedback*6); local spray_density=1+math.floor(feedback*4)
   local div_pow=math.pow(div_total,3)*0.25; local depth_l=util.clamp(depth+div_pow,0,1); local depth_r=util.clamp(depth-div_pow,0,1)
   local idx_l=math.floor(depth_l*(stages-1))+1; local idx_r=math.floor(depth_r*(stages-1))+1
-  
   local current_frame = {}
   for i=1,stages do
     local zig=(i%2==0)and -1 or 1; local skew_offset=zig*skew*10
@@ -74,7 +75,6 @@ local function draw_chain(state)
     table.insert(current_frame, {x=px, y_l=py_base-split_offset+skew_offset, y_r=py_base+split_offset+skew_offset, rad=spray_radius, den=spray_density, sharp=sharpness, ball_l=(i==idx_l), ball_r=(i==idx_r)})
   end
   table.insert(trail_history,1,current_frame); if #trail_history>MAX_TRAILS then table.remove(trail_history) end
-  
   for t=#trail_history,1,-1 do
     local frame=trail_history[t]; local brightness=1
     if t==1 then brightness=15 elseif t==2 then brightness=4 end
@@ -91,7 +91,11 @@ end
 local function draw_popup(state)
   if state.popup.active then
     if util.time() > state.popup.deadline then state.popup.active = false
-    else screen.level(0); screen.rect(10,54,108,10); screen.fill(); screen.level(15); screen.rect(10,54,108,10); screen.stroke(); screen.move(64,61); screen.text_center(state.popup.name..": "..state.popup.value) end
+    else 
+      screen.level(0); screen.rect(1,54,126,10); screen.fill(); -- MARGIN FIX
+      screen.level(15); screen.rect(1,54,126,10); screen.stroke(); 
+      screen.move(64,61); screen.text_center(state.popup.name..": "..state.popup.value) 
+    end
   end
 end
 
@@ -99,15 +103,17 @@ function Graphics.draw(state)
   screen.level(15)
   screen.move(128, 8); screen.text_right(state.PAGE_NAMES[state.current_page])
   local bot_y = 62; local top_y = 8
+  local hint_y = bot_y - 9
+  local shift_active = state.k1_held or state.grid_shift_active or state.synth_btn_held
   
   if state.current_page ~= state.PAGES.DIVERGENCE then draw_chain(state) end
   
-  local shift_active = state.k1_held or state.grid_shift_active or state.synth_btn_held
-
   if state.current_page == state.PAGES.SYNTH then
     if not shift_active then
         draw_param_inline("Timbre", util.round(params:get("vintage_timbre"), 0.01), 0, top_y, "left")
+        draw_key_hint("K2: LPG " .. params:string("vintage_lpg_mode"), 0, hint_y, "left")
         draw_param_inline("Mix", util.round(params:get("vintage_mix"), 0.01), 0, bot_y, "left")
+        draw_key_hint("K3: NOISE " .. string.format("%.2f", params:get("vintage_noisy_saw")), 128, hint_y, "right")
         draw_param_inline("Cutoff", math.floor(params:get("vintage_cutoff")).."Hz", 128, bot_y, "right")
     else
         draw_param_inline("Vol", util.round(params:get("vintage_vol"), 0.01), 0, top_y, "left")
@@ -117,31 +123,55 @@ function Graphics.draw(state)
 
   elseif state.current_page == state.PAGES.MAIN then
     draw_param_inline("Mix", math.floor(params:get("mix")*100).."%", 0, top_y, "left")
+    local ghost_txt = (params:get("ghost_feed")==2) and "ACTIVE" or "OFF"
+    draw_key_hint("K2: GHOST " .. ghost_txt, 0, hint_y, "left")
     draw_param_inline("Depth", math.floor(params:get("depth")*100).."%", 0, bot_y, "left")
+    local freeze_txt = (params:get("time_freeze")==2) and "ON" or "OFF"
+    draw_key_hint("K3: FREEZE " .. freeze_txt, 128, hint_y, "right")
     draw_param_inline("Delay", util.round(params:get("decay"), 0.01).."s", 128, bot_y, "right")
+    
   elseif state.current_page == state.PAGES.PHYSICS then
     draw_param_inline("Fdbk", math.floor(params:get("feedback")*100).."%", 0, top_y, "left")
+    local hpf_txt = params:string("feedback_hpf"); if hpf_txt ~= "OFF" then hpf_txt = hpf_txt.."Hz" end
+    draw_key_hint("K2: HPF " .. hpf_txt, 0, hint_y, "left")
     local pol = params:get("polarity"); local pol_txt = ""; if pol < -0.3 then pol_txt = " (MTL)" elseif pol > 0.3 then pol_txt = " (WTR)" end
     draw_param_inline("Pol", util.round(pol, 0.01)..pol_txt, 0, bot_y, "left")
+    draw_key_hint("K3: MAX FDBK", 128, hint_y, "right")
     draw_param_inline("Damp", util.round(params:get("damping"), 0.01), 128, bot_y, "right")
+    
   elseif state.current_page == state.PAGES.TEXTURE then
     draw_param_inline("Wander", util.round(params:get("wander"), 0.01), 0, top_y, "left")
+    local freeze_txt = (params:get("texture_freeze")==2) and "ON" or "OFF"
+    draw_key_hint("K2: FREEZE " .. freeze_txt, 0, hint_y, "left")
     draw_param_inline("T.Scale", string.format("x%.2f", params:get("time_scale")), 0, bot_y, "left")
+    local cry_txt = (params:get("crystal_mode")==2) and "ON" or "OFF"
+    draw_key_hint("K3: CRYSTAL " .. cry_txt, 128, hint_y, "right")
     draw_param_inline("Freq", util.round(params:get("frequency"), 0.01), 128, bot_y, "right")
+    
   elseif state.current_page == state.PAGES.MISC then
      draw_param_inline("Grit", util.round(params:get("grit"), 0.01), 0, top_y, "left")
+     local clamp_txt = (params:get("ef_clamp")==2) and "ON" or "OFF"
+     draw_key_hint("K2: CLAMP " .. clamp_txt, 0, hint_y, "left")
      draw_param_inline("D.Res", math.floor(params:get("dyn_res")*100).."%", 0, bot_y, "left")
+     draw_key_hint("K3: OCTAVE " .. params:get("vintage_octave"), 128, hint_y, "right")
      local tap = params:get("fb_tap_pos")
      draw_param_inline("Tap", util.round(tap, 0.1), 128, bot_y, "right")
+     
   elseif state.current_page == state.PAGES.DIVERGENCE then
      local shape = params:get("lfo_shape"); screen.level(3); screen.move(64, 25); screen.text_center("LFO SHAPE"); draw_lfo_icon(shape, 64, 30) 
      draw_param_inline("Rate", string.format("%.2f Hz", params:get("lfo_rate")), 0, top_y, "left")
+     draw_key_hint("K2: SHAPE", 0, hint_y, "left")
      draw_param_inline("Amt", util.round(params:get("lfo_amt"), 0.01), 0, bot_y, "left")
+     draw_key_hint("K3: SWELL", 128, hint_y, "right")
      draw_param_inline("Div", util.round(params:get("div_base"), 0.01), 128, bot_y, "right")
+     
   elseif state.current_page == state.PAGES.OUTPUT then
     local t = params:get("tone"); local t_txt = util.round(t, 0.01); if t < -0.1 then t_txt = "LPF " .. t_txt elseif t > 0.1 then t_txt = "HPF " .. t_txt end
     draw_param_inline("Tone", t_txt, 0, top_y, "left")
     draw_param_inline("Level", util.round(params:get("amp"), 0.01), 0, bot_y, "left")
+    local b_foc = params:get("bass_focus_idx")
+    local b_txt = (b_foc==1) and "OFF" or ((b_foc==2) and "50" or ((b_foc==3) and "100" or "200"))
+    draw_key_hint("K3: BASS " .. b_txt, 128, hint_y, "right")
     draw_param_inline("Skew", util.round(params:get("skew"), 0.01), 128, bot_y, "right")
   end
   draw_popup(state)
