@@ -1,5 +1,5 @@
 -- archivo: lib/params.lua
--- versión: V228 (Clean Params)
+-- versión: V311 (Momentary FX Group)
 
 local Params = {}
 local Globals = require 'blurred/lib/globals'
@@ -7,7 +7,8 @@ local MusicUtil = require 'musicutil'
 
 function Params.init()
   params:add_separator("BLURRED")
-  -- ... [GRUPOS 1-6 IGUALES] ...
+  
+  -- [GRUPOS 1-6 IDENTICOS]
   params:add_group("MAIN", 3)
   params:add{type = "control", id = "mix", name = "Mix", controlspec = controlspec.new(0, 1, 'lin', 0, 0.5, "%"), action = function(x) engine.mix(x) end}
   params:add{type = "control", id = "depth", name = "Depth", controlspec = controlspec.new(0, 1, 'lin', 0, 1, ""), action = function(x) engine.depth(x) end}
@@ -43,7 +44,6 @@ function Params.init()
   params:add{type = "control", id = "skew", name = "Stereo Skew", controlspec = controlspec.new(0, 1, 'lin', 0, 0, ""), action = function(x) engine.skew(x) end}
   params:add{type = "option", id = "output_mono", name = "Mono Output", options = {"OFF", "ON"}, default = 1, action = function(x) engine.output_mono(x-1) end}
 
-  -- [VINTAGE SYNTH IGUAL]
   params:add_group("VINTAGE SYNTH", 15)
   params:add{type = "control", id = "vintage_vol", name = "Synth Vol", controlspec = controlspec.new(0, 2, 'lin', 0, 0.8), action = function(x) engine.vintage_vol(x) end}
   params:add{type = "control", id = "vintage_timbre", name = "Timbre", controlspec = controlspec.new(0, 1, 'lin', 0, 0.2), action = function(x) engine.vintage_timbre(x) end}
@@ -57,6 +57,7 @@ function Params.init()
   params:add{type = "control", id = "vintage_drift", name = "Drift", controlspec = controlspec.new(0, 1, 'lin', 0, 0), action = function(x) engine.vintage_drift(x) end}
   params:add{type = "control", id = "vintage_noisy_saw", name = "Noisy Saw", controlspec = controlspec.new(0, 1, 'lin', 0, 0), action = function(x) engine.vintage_noisy_saw(x) end}
   params:add{type = "option", id = "vintage_keytrack", name = "Key Track", options = {"OFF", "HALF", "FULL"}, default = 1, action = function(x) engine.vintage_keytrack((x-1)*0.5) end}
+  
   params:add{type = "option", id = "max_voices", name = "Max Voices", options = {"4", "6", "8", "12"}, default = 2} 
   params:add{type = "number", id = "scale_idx", name = "Scale", min = 1, max = #Globals.SCALES, default = 1}
   params:add{type = "number", id = "root_note", name = "Root Note", min = 0, max = 127, default = 36, formatter = function(param) return MusicUtil.note_num_to_name(param:get(), true) end}
@@ -65,25 +66,26 @@ function Params.init()
   params:add{type = "number", id = "midi_device", name = "MIDI Device", min = 0, max = 4, default = 0, formatter = function(param) return param:get()==0 and "Disabled" or "Port "..param:get() end, action = function(x) end}
   params:add{type = "number", id = "midi_channel", name = "MIDI Channel", min = 0, max = 16, default = 0, formatter = function(param) return param:get()==0 and "Omni" or tostring(param:get()) end}
 
-  -- HIDDEN PARAMS
+  -- [MOMENTARY FX GROUP]
+  params:add_group("MOMENTARY FX", 7)
   params:add{type = "option", id = "ghost_feed", name = "Ghost Feed", options={"OFF", "ON"}, default=1, action=function(x) engine.ghost_feed(x-1) end}
   params:add{type = "option", id = "time_freeze", name = "Time Freeze", options={"OFF", "ON"}, default=1, action=function(x) engine.time_freeze(x-1) end}
   params:add{type = "option", id = "crystal_mode", name = "Harmonic Crystal", options={"OFF", "ON"}, default=1, action=function(x) engine.crystal_mode(x-1) end}
-  params:add{type = "number", id = "bass_focus_idx", name = "Bass Focus", min=1, max=4, default=1, action=function(x) 
-     local freqs = {0, 50, 100, 200}
-     engine.bass_focus(freqs[x]) 
-  end}
+  params:add{type = "number", id = "bass_focus_idx", name = "Bass Focus", min=1, max=4, default=1, action=function(x) local freqs = {0, 50, 100, 200}; engine.bass_focus(freqs[x]) end}
+  params:add{type = "option", id = "tape_stop_gate", name = "Tape Stop", options={"OFF", "ON"}, default=1} -- Dummy param for logic if needed, or remove completely from visual ref
   
-  -- REMOVED TAPE STOP PARAMS TO AVOID ERROR
+  params:add_group("SYSTEM", 2)
+  params:add{type = "option", id = "operation_mode", name = "Op Mode", options = {"SYNTH", "RAIN"}, default = 1, action = function(x) 
+     -- Callback handled in blurred.lua logic via param check
+  end}
+  params:add{type = "option", id = "ef_clamp", name = "EF Clamp", options = {"OFF", "ON"}, default = 2, action = function(x) engine.ef_clamp(x-1) end}
 
-  -- [RESTO IGUAL]
+  -- GENERATORS
   params:add_group("GENERATORS", 4)
   params:add{type = "control", id = "ping_trig", name = "Ping Trig", controlspec = controlspec.new(0, 1, 'lin', 0, 0), action = function(x) engine.ping_trig(x) end}
   params:add{type = "control", id = "ping_pitch", name = "P. Pitch", controlspec = controlspec.new(0, 127, 'lin', 0, 60), action = function(x) engine.ping_pitch(x) end}
   params:add{type = "control", id = "ping_amp", name = "P. Amp", controlspec = controlspec.new(0, 1, 'lin', 0, 1), action = function(x) engine.ping_amp(x) end}
   params:add{type = "control", id = "ping_color", name = "P. Color", controlspec = controlspec.new(-1, 1, 'lin', 0, 0), action = function(x) engine.ping_color(x) end}
-  params:add_group("SYSTEM", 1)
-  params:add{type = "option", id = "ef_clamp", name = "EF Clamp", options = {"OFF", "ON"}, default = 2, action = function(x) engine.ef_clamp(x-1) end}
 
   params:bang()
 end
